@@ -1,0 +1,20 @@
+# Python virtual environment
+venv/
+backend/venv/
+.env
+backend/.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+gmail_tokens.json
+calendar_tokens.json
+
+# Database
+*.db
+
+# IDE
+.vscode/

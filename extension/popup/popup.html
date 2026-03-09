@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STKE</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── Auth Screen ─────────────────────────────────────────── -->
+    <div id="screen-auth" class="screen hidden">
+      <div class="auth-header">
+        <div class="logo-mark">⬡</div>
+        <h1 class="logo-text">STKE</h1>
+        <p class="logo-sub">Semantic Task Extractor</p>
+      </div>
+
+      <div class="tab-row">
+        <button class="tab-btn active" data-tab="login">Sign In</button>
+        <button class="tab-btn" data-tab="register">Register</button>
+      </div>
+
+      <!-- Login -->
+      <div id="tab-login" class="tab-panel">
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <button class="btn-primary" id="btn-login">Sign In</button>
+      </div>
+
+      <!-- Register -->
+      <div id="tab-register" class="tab-panel hidden">
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" id="reg-name" placeholder="Jane Smith" />
+        </div>
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="reg-username" placeholder="janesmith" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="reg-email" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="reg-password" placeholder="Min. 8 characters" />
+        </div>
+        <button class="btn-primary" id="btn-register">Create Account</button>
+      </div>
+
+      <div id="auth-error" class="error-msg hidden"></div>
+
+
+    </div>
+
+    <!-- ── Main App ────────────────────────────────────────────── -->
+    <div id="screen-main" class="screen hidden">
+
+      <!-- Top bar -->
+      <div class="topbar">
+        <div class="topbar-left">
+          <span class="logo-mark-sm">⬡</span>
+          <span class="topbar-title">STKE</span>
+        </div>
+        <div class="topbar-right">
+          <button class="icon-btn" id="btn-open-dashboard" title="Open Dashboard">🖥</button>
+          <button class="icon-btn" id="btn-logout" title="Sign out">⏻</button>
+        </div>
+      </div>
+
+      <!-- Nav tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-view="extract">Extract</button>
+        <button class="nav-tab" data-view="tasks">Tasks</button>
+        <button class="nav-tab" data-view="history">History</button>
+      </nav>
+
+      <!-- ── Extract View ───────────────────────────────────── -->
+      <div id="view-extract" class="view">
+        <div class="extract-actions">
+          <button class="action-btn primary" id="btn-extract-page">
+            <span class="action-icon">📄</span>
+            <div>
+              <div class="action-label">Extract from Page</div>
+              <div class="action-sub">Scan entire page content</div>
+            </div>
+          </button>
+          <button class="action-btn" id="btn-extract-selection">
+            <span class="action-icon">✂️</span>
+            <div>
+              <div class="action-label">Extract Selection</div>
+              <div class="action-sub">Use highlighted text</div>
+            </div>
+          </button>
+        </div>
+
+        <div class="divider"><span>or paste text</span></div>
+
+        <div class="paste-area">
+          <textarea id="paste-input" placeholder="Paste email, chat, or any text here…" rows="5"></textarea>
+          <div class="paste-meta">
+            <select id="ctx-select">
+              <option value="email">📧 Email</option>
+              <option value="chat">💬 Chat</option>
+              <option value="document">📄 Document</option>
+              <option value="meeting">🎤 Meeting</option>
+              <option value="webpage" selected>🌐 Webpage</option>
+            </select>
+            <button class="btn-sm" id="btn-extract-paste">Extract Tasks</button>
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div id="extract-loading" class="loading-state hidden">
+          <div class="spinner"></div>
+          <p>Extracting tasks…</p>
+        </div>
+
+        <!-- Results -->
+        <div id="extract-results" class="hidden">
+          <div class="results-header">
+            <span id="results-count">0 tasks found</span>
+            <span id="results-dup" class="dup-badge hidden"></span>
+          </div>
+          <div id="results-list"></div>
+        </div>
+      </div>
+
+      <!-- ── Tasks View ─────────────────────────────────────── -->
+      <div id="view-tasks" class="view hidden">
+        <div class="filter-row">
+          <select id="filter-status">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+          <select id="filter-priority">
+            <option value="">All Priority</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <button class="btn-sm" id="btn-refresh-tasks">↻</button>
+        </div>
+
+        <div id="tasks-loading" class="loading-state hidden">
+          <div class="spinner"></div>
+          <p>Loading tasks…</p>
+        </div>
+
+        <div id="tasks-empty" class="empty-state hidden">
+          <div class="empty-icon">📋</div>
+          <p>No tasks yet. Extract some!</p>
+        </div>
+
+        <div id="tasks-list"></div>
+      </div>
+
+      <!-- ── History View ───────────────────────────────────── -->
+      <div id="view-history" class="view hidden">
+        <div class="history-stats">
+          <div class="stat-card">
+            <div class="stat-num" id="stat-total">—</div>
+            <div class="stat-label">Total Tasks</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="stat-pending">—</div>
+            <div class="stat-label">Pending</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="stat-done">—</div>
+            <div class="stat-label">Completed</div>
+          </div>
+        </div>
+
+        <div class="section-title">Recent Activity</div>
+        <div id="history-list">
+          <div class="empty-state">
+            <p>Extract tasks to see history</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
