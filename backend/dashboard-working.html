@@ -81,11 +81,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
 .stat-card.info .stat-num{color:#38bdf8}
 
 /* ── Nav tabs ── */
-.nav-tabs{display:flex;gap:4px;padding:16px 32px 0;flex-wrap:wrap}
-.nav-tab{padding:8px 16px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;display:flex;align-items:center;gap:6px}
+.nav-tabs{display:flex;gap:4px;padding:16px 32px 0}
+.nav-tab{padding:8px 20px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s}
 .nav-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:11px;font-weight:700;background:rgba(255,255,255,.25);color:inherit;line-height:1}
-.nav-tab:not(.active) .tab-badge{background:var(--bg3);color:var(--text2)}
 
 /* ── Content grid ── */
 .content{display:grid;grid-template-columns:1fr var(--sidebar-w);gap:20px;padding:0 32px 32px;flex:1}
@@ -147,10 +145,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
 .chip.owner{color:var(--accent3);border-color:rgba(165,180,252,.3);background:rgba(165,180,252,.06)}
 .chip.context{color:#34d399;border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.06)}
 .chip.reminder{color:#f472b6;border-color:rgba(244,114,182,.3);background:rgba(244,114,182,.06)}
-.chip.owner-type-explicit{color:#fb923c;border-color:rgba(251,146,60,.3);background:rgba(251,146,60,.06)}
-.chip.owner-type-shared{color:#38bdf8;border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.06)}
-.chip.owner-type-role{color:#a78bfa;border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.06)}
-.chip.owner-type-inferred{color:#94a3b8;border-color:rgba(148,163,184,.3);background:rgba(148,163,184,.06)}
 
 /* expand */
 .task-expand{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
@@ -395,10 +389,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
 <!-- Main -->
 <div id="main-screen">
   <div class="nav-tabs">
-    <button class="nav-tab active" data-view="my_tasks">🙋 My Tasks <span class="tab-badge" id="badge-my">—</span></button>
-    <button class="nav-tab" data-view="delegated">📤 Delegated <span class="tab-badge" id="badge-delegated">—</span></button>
-    <button class="nav-tab" data-view="team">👥 Team <span class="tab-badge" id="badge-team">—</span></button>
-    <button class="nav-tab" data-view="needs_assignment">❓ Needs Assignment <span class="tab-badge" id="badge-needs">—</span></button>
+    <button class="nav-tab active" data-view="tasks">📋 Tasks</button>
     <button class="nav-tab" data-view="analytics">📊 Analytics</button>
   </div>
 
@@ -590,8 +581,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
 const API = '/api/v1';
 let token = localStorage.getItem('stke_token');
 let allTasks = [];
-let activeTaskTab = 'my_tasks';   // tracks which ownership tab is active
-let currentUserName = '';          // set on login — used for ownership tab filtering
 let searchTimer = null;
 let reminderTimer = null;
 let activeSrcType = 'email';
@@ -681,12 +670,9 @@ function setupListeners() {
   document.querySelectorAll('.nav-tab').forEach(btn => btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const view = btn.dataset.view;
-    const isAnalytics = view === 'analytics';
-    document.getElementById('analytics-view').classList.toggle('active', isAnalytics);
-    document.querySelector('.content').style.display = isAnalytics ? 'none' : 'grid';
-    if (isAnalytics) { renderAnalytics(); }
-    else { activeTaskTab = view; document.getElementById('search-input').dataset.special = ''; renderTasks(); }
+    document.getElementById('analytics-view').classList.toggle('active', btn.dataset.view === 'analytics');
+    document.querySelector('.content').style.display = btn.dataset.view === 'tasks' ? 'grid' : 'none';
+    if (btn.dataset.view === 'analytics') renderAnalytics();
   }));
   // Extract
   document.getElementById('ws-extract-btn').addEventListener('click', doExtract);
@@ -791,31 +777,7 @@ function updateStats() {
   document.getElementById('stat-pending').textContent = allTasks.filter(t => t.status === 'pending').length;
   document.getElementById('stat-done').textContent = allTasks.filter(t => t.status === 'completed').length;
   document.getElementById('stat-overdue').textContent = allTasks.filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'completed').length;
-  // Tab badges
-  document.getElementById('badge-my').textContent       = allTasks.filter(t => !t.owner_type || ['self','inferred','fallback'].includes(t.owner_type)).length;
-  document.getElementById('badge-delegated').textContent = allTasks.filter(t => t.owner_type === 'explicit').length;
-  document.getElementById('badge-team').textContent      = allTasks.filter(t => t.owner_type === 'shared').length;
-  document.getElementById('badge-needs').textContent     = allTasks.filter(t => t.owner_type === 'role').length;
   startReminderCheck();
-}
-function getTabTasks() {
-  // Filter allTasks by the active ownership tab using owner_type
-  switch (activeTaskTab) {
-    case 'my_tasks':
-      // Tasks that belong to the current user: self-assigned, inferred, fallback, or legacy (null)
-      return allTasks.filter(t => !t.owner_type || ['self', 'inferred', 'fallback'].includes(t.owner_type));
-    case 'delegated':
-      // Tasks explicitly assigned to someone else
-      return allTasks.filter(t => t.owner_type === 'explicit');
-    case 'team':
-      // Tasks shared across the team (no single owner)
-      return allTasks.filter(t => t.owner_type === 'shared');
-    case 'needs_assignment':
-      // Tasks with a role-based owner that still needs a real person assigned
-      return allTasks.filter(t => t.owner_type === 'role');
-    default:
-      return allTasks;
-  }
 }
 function getFilteredTasks() {
   const statusF = document.getElementById('filter-status').value;
@@ -823,8 +785,7 @@ function getFilteredTasks() {
   const search = document.getElementById('search-input').value.toLowerCase();
   const special = document.getElementById('search-input').dataset.special || '';
   const now = new Date();
-  const base = getTabTasks();
-  return base.filter(t => {
+  return allTasks.filter(t => {
     if (special === 'overdue') return t.deadline && new Date(t.deadline) < now && t.status !== 'completed';
     if (special === 'due_soon') { const d = t.deadline ? new Date(t.deadline) - now : -1; return d > 0 && d < 86400000 && t.status !== 'completed'; }
     if (special === 'context') return (t.source_context || '').toLowerCase().includes(search);
@@ -838,17 +799,7 @@ function renderTasks() {
   const filtered = getFilteredTasks();
   document.getElementById('task-count').textContent = `(${filtered.length})`;
   const list = document.getElementById('task-list');
-  if (!filtered.length) {
-    const emptyMessages = {
-      my_tasks:        { icon: '🙋', msg: 'No tasks assigned to you yet' },
-      delegated:       { icon: '📤', msg: 'No delegated tasks — no one has been assigned work yet' },
-      team:            { icon: '👥', msg: 'No shared team tasks found' },
-      needs_assignment:{ icon: '❓', msg: 'No unassigned tasks — everything has an owner!' },
-    };
-    const e = emptyMessages[activeTaskTab] || { icon: '📭', msg: 'No tasks found' };
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">${e.icon}</div><p>${e.msg}</p></div>`;
-    return;
-  }
+  if (!filtered.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No tasks found</p></div>'; return; }
   list.innerHTML = '';
   filtered.forEach(t => list.appendChild(buildTaskItem(t)));
 }
@@ -890,7 +841,6 @@ function buildTaskItem(task) {
       ${desc ? `<div class="task-desc-line">${esc(desc)}</div>` : ''}
       <div class="task-chips">
         ${task.assigned_to ? `<span class="chip owner">👤 ${esc(task.assigned_to)}</span>` : ''}
-        ${task.owner_type && task.owner_type !== 'self' && task.owner_type !== 'fallback' ? `<span class="chip owner-type-${task.owner_type}">${ownerTypeLabel(task.owner_type)}</span>` : ''}
         ${task.deadline_raw ? `<span class="chip ${isOverdue ? 'overdue' : isDueSoon ? 'reminder' : 'deadline'}">📅 ${esc(task.deadline_raw)}</span>` : ''}
         ${isDueSoon ? `<span class="chip reminder">🔔 Due soon</span>` : ''}
         ${task.source_context ? `<span class="chip context">📍 ${esc(task.source_context)}</span>` : ''}
@@ -970,41 +920,21 @@ async function doBulkDelete() {
 }
 
 // ── Decisions & Dependencies ──────────────────────────────────
-function updateDdBadges() { /* updated after load */ }
-
-// Persist last extraction to sessionStorage so D&D survives page interactions
-function cacheExtraction(data) {
-  window._lastExtraction = data;
-  try {
-    const toStore = { decisions: data.decisions || [], dependencies: data.dependencies || [] };
-    sessionStorage.setItem('stke_last_dd', JSON.stringify(toStore));
-  } catch(_) {}
+function updateDdBadges() {
+  // We'll update after load
 }
-function getCachedExtraction() {
-  if (window._lastExtraction) return window._lastExtraction;
-  try {
-    const raw = sessionStorage.getItem('stke_last_dd');
-    if (raw) return JSON.parse(raw);
-  } catch(_) {}
-  return null;
-}
-
 async function loadDecDep() {
   ddLoaded = false;
   const body = document.getElementById('dec-dep-body');
   body.innerHTML = '<div class="dd-loading"><div class="dd-spinner"></div>Loading…</div>';
   try {
-    const data = getCachedExtraction();
-    if (!data) {
-      body.innerHTML = '<div class="dd-empty">No decisions or dependencies yet.<br>Extract text or an email to populate these.</div>';
-      ddLoaded = true; return;
-    }
+    const data = await api('/tasks/decisions-dependencies');
     const decisions = data.decisions || [];
     const dependencies = data.dependencies || [];
     document.getElementById('dd-dec-count').textContent = `⚖️ ${decisions.length}`;
     document.getElementById('dd-dep-count').textContent = `🔗 ${dependencies.length}`;
     if (!decisions.length && !dependencies.length) {
-      body.innerHTML = '<div class="dd-empty">No decisions or dependencies in last extraction.<br>Extract text containing decisions or dependencies to populate.</div>';
+      body.innerHTML = '<div class="dd-empty">No decisions or dependencies found yet.<br>Extract text to populate these.</div>';
       ddLoaded = true; return;
     }
     let html = '';
@@ -1019,7 +949,7 @@ async function loadDecDep() {
     body.innerHTML = html;
     ddLoaded = true;
   } catch (e) {
-    body.innerHTML = `<div class="dd-empty">Failed to load: ${e && e.message ? e.message : String(e)}</div>`;
+    body.innerHTML = `<div class="dd-empty">Failed to load: ${esc(e.message)}</div>`;
   }
 }
 
@@ -1057,17 +987,8 @@ async function doExtract() {
     }
     document.getElementById('ws-extract-text').value = '';
     document.getElementById('ws-char-count').textContent = '0 / 5000';
-    // Cache decisions/deps for loadDecDep()
-    cacheExtraction(data);
-    ddLoaded = false;
     await loadTasks();
-    // Auto-sync to calendar unconditionally after extraction
-    if (calConnected) {
-      try {
-        const sync = await api('/calendar/sync-all', { method: 'POST' });
-        if (sync.synced > 0) { await loadCalEvents(); showToast('📅 ' + sync.synced + ' tasks synced to calendar'); }
-      } catch(e) { console.warn('Calendar sync failed:', e.message); }
-    }
+    ddLoaded = false; // reset so D&D reloads next open
     showToast(`⚡ ${tasks.length} tasks extracted in ${data.processing_time_ms}ms!`);
   } catch (e) {
     document.getElementById('ws-results').innerHTML = `<div style="padding:10px 18px 12px;font-size:12px;color:var(--danger)">❌ ${esc(e.message)}</div>`;
@@ -1153,58 +1074,24 @@ async function loadInboxEmails() {
 function updateMiniGmail(emails) {
   const body = document.getElementById('mini-gmail-body');
   if (!gmailConnected) return;
-  if (!emails || !emails.length) { body.innerHTML = '<div class="mini-empty">No unread emails</div>'; return; }
+  if (!emails || !emails.length) { body.innerHTML = '<div class="mini-empty">No unread emails</div><button class="mini-action-btn gmail" onclick="extractAllEmails()">⚡ Extract All</button>'; return; }
   document.getElementById('mini-gmail-meta').textContent = emails.length + ' unread';
-  const latest = emails[0];
-  // Show latest email + "Extract Latest" button. "Extract All" is in the Inbox tab.
-  body.innerHTML = `<div class="mini-item" style="cursor:pointer" onclick="switchToInboxTab()"><div class="mini-item-title">${esc((latest.subject || '(no subject)').substring(0, 28))}</div><div class="mini-item-sub">${esc((latest.from || '').substring(0, 24))}</div></div><button class="mini-action-btn gmail" onclick="extractLatestEmail()">⚡ Extract Latest</button>`;
-}
-async function extractLatestEmail() {
-  const emails = window._gmailEmails;
-  if (!emails || !emails.length) { showToast('No emails loaded'); return; }
-  await extractSingleEmail(emails[0].id, 0);
-}
-async function switchToInboxTab() {
-  // Switch workspace to Inbox tab
-  document.querySelectorAll('.ws-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.ws-pane').forEach(p => p.style.display = 'none');
-  const inboxTab = document.querySelector('.ws-tab[data-pane="inbox"]');
-  if (inboxTab) { inboxTab.classList.add('active'); document.getElementById('pane-inbox').classList.add('active'); loadInboxEmails(); }
+  body.innerHTML = `<div class="mini-item"><div class="mini-item-title">${esc((emails[0].subject || '').substring(0, 26))}</div><div class="mini-item-sub">${esc((emails[0].from || '').substring(0, 22))}</div></div><button class="mini-action-btn gmail" onclick="extractAllEmails()">⚡ Extract All</button>`;
 }
 async function extractSingleEmail(id, idx) {
   const email = window._gmailEmails && window._gmailEmails[idx];
   if (!email) return;
   try {
     const result = await api(`/gmail/extract/${id}`, { method: 'POST', body: JSON.stringify({ text: email.body, subject: email.subject, sender: email.from }) });
-    cacheExtraction(result);
-    ddLoaded = false;
-    showInPageAlert('📧 Extracted!', (result.tasks_found || 0) + ' tasks from email', 'success');
+    showInPageAlert('📧 Extracted!', result.tasks_found + ' tasks from email', 'success');
     await loadTasks();
-    // Auto-sync to calendar unconditionally
-    if (calConnected) {
-      try {
-        const sync = await api('/calendar/sync-all', { method: 'POST' });
-        if (sync.synced > 0) { await loadCalEvents(); showToast('📅 ' + sync.synced + ' tasks synced to calendar'); }
-      } catch(e) { console.warn('Calendar sync failed:', e.message); }
-    }
   } catch (e) { showToast('Error: ' + e.message); }
 }
 async function extractAllEmails() {
   try {
     const data = await api('/gmail/extract-all', { method: 'POST' });
-    // Cache decisions/deps if returned (backend may aggregate them)
-    cacheExtraction(data);
-    ddLoaded = false;
-    showInPageAlert('⚡ Done!', (data.emails_processed || 0) + ' emails → ' + (data.total_tasks_found || 0) + ' tasks', 'success');
+    showInPageAlert('⚡ Done!', data.emails_processed + ' emails → ' + data.total_tasks_found + ' tasks', 'success');
     await loadTasks();
-    // Auto-sync to calendar unconditionally — new tasks may have been saved
-    // even if total_tasks_found is 0 (dedup skips count but tasks still exist)
-    if (calConnected) {
-      try {
-        const sync = await api('/calendar/sync-all', { method: 'POST' });
-        if (sync.synced > 0) { await loadCalEvents(); showToast('📅 ' + sync.synced + ' tasks synced to calendar'); }
-      } catch(e) { console.warn('Calendar sync failed:', e.message); }
-    }
   } catch (e) { showToast('Error: ' + e.message); }
 }
 
@@ -1282,10 +1169,8 @@ async function saveEdit() {
 
 // ── Filter by card ─────────────────────────────────────────────
 function filterByCard(type) {
-  // Switch to My Tasks tab when stat cards are clicked
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
-  document.querySelector('[data-view="my_tasks"]').classList.add('active');
-  activeTaskTab = 'my_tasks';
+  document.querySelector('[data-view="tasks"]').classList.add('active');
   document.getElementById('analytics-view').classList.remove('active');
   document.querySelector('.content').style.display = 'grid';
   const ss = document.getElementById('filter-status'); const ps = document.getElementById('filter-priority'); const si = document.getElementById('search-input');
@@ -1335,7 +1220,7 @@ function showInPageAlert(title, body, type) {
 function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function priorityLabel(p) { return {low:'🟢 Low',medium:'🔵 Medium',high:'🟡 High',critical:'🔴 Critical'}[p]||p; }
-function ownerTypeLabel(t) { return {explicit:'📤 Delegated',shared:'👥 Team',role:'❓ Unassigned',inferred:'🔍 Inferred',fallback:'📋 Mine'}[t]||t; }
 </script>
 </body>
 </html>
+

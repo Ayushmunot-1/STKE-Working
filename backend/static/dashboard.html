@@ -354,7 +354,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
     <div class="logo-hex">⬡</div>
     <div>
       <div class="logo-name">STKE</div>
-      <div class="logo-tag">Semantic Task Extractor</div>
+      <div class="logo-tag">Semantic Task And Knowledge Extractor</div>
     </div>
   </div>
   <div class="header-right">
@@ -370,7 +370,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
     <div class="auth-logo">
       <span class="hex">⬡</span>
       <h1>STKE</h1>
-      <p>Semantic Task Extractor</p>
+      <p>Semantic Task And Knowledge Extractor</p>
     </div>
     <div class="auth-tabs">
       <button class="auth-tab active" data-tab="login">Sign In</button>
@@ -403,7 +403,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
   </div>
 
   <div class="stats-bar">
-    <div class="stat-card" style="cursor:pointer" onclick="filterByCard('all')"><div class="stat-icon">📋</div><div class="stat-num" id="stat-total">—</div><div class="stat-label">Total Tasks</div></div>
+    <div class="stat-card" style="cursor:pointer" onclick="filterByCard('all')"><div class="stat-icon">📋</div><div class="stat-num" id="stat-total">—</div><div class="stat-label" id="stat-total-label">Total Tasks</div></div>
     <div class="stat-card warning" style="cursor:pointer" onclick="filterByCard('pending')"><div class="stat-icon">⏳</div><div class="stat-num" id="stat-pending">—</div><div class="stat-label">Pending</div></div>
     <div class="stat-card success" style="cursor:pointer" onclick="filterByCard('completed')"><div class="stat-icon">✅</div><div class="stat-num" id="stat-done">—</div><div class="stat-label">Completed</div></div>
     <div class="stat-card danger" style="cursor:pointer" onclick="filterByCard('overdue')"><div class="stat-icon">🔥</div><div class="stat-num" id="stat-overdue">—</div><div class="stat-label">Overdue</div></div>
@@ -686,7 +686,15 @@ function setupListeners() {
     document.getElementById('analytics-view').classList.toggle('active', isAnalytics);
     document.querySelector('.content').style.display = isAnalytics ? 'none' : 'grid';
     if (isAnalytics) { renderAnalytics(); }
-    else { activeTaskTab = view; document.getElementById('search-input').dataset.special = ''; renderTasks(); }
+    else {
+      activeTaskTab = view;
+      document.getElementById('search-input').dataset.special = '';
+      const tabLabels = { my_tasks: 'My Tasks', delegated: 'Delegated', team: 'Team Tasks', needs_assignment: 'Unassigned' };
+      const labelEl = document.getElementById('stat-total-label');
+      if (labelEl) labelEl.textContent = tabLabels[view] || 'Total Tasks';
+      updateStats();
+      renderTasks();
+    }
   }));
   // Extract
   document.getElementById('ws-extract-btn').addEventListener('click', doExtract);
@@ -787,10 +795,11 @@ async function loadTasks() {
 }
 function updateStats() {
   const now = new Date();
-  document.getElementById('stat-total').textContent = allTasks.length;
-  document.getElementById('stat-pending').textContent = allTasks.filter(t => t.status === 'pending').length;
-  document.getElementById('stat-done').textContent = allTasks.filter(t => t.status === 'completed').length;
-  document.getElementById('stat-overdue').textContent = allTasks.filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'completed').length;
+  const tabTasks = getTabTasks();  // tab-aware base
+  document.getElementById('stat-total').textContent = tabTasks.length;
+  document.getElementById('stat-pending').textContent = tabTasks.filter(t => t.status === 'pending').length;
+  document.getElementById('stat-done').textContent = tabTasks.filter(t => t.status === 'completed').length;
+  document.getElementById('stat-overdue').textContent = tabTasks.filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'completed').length;
   // Tab badges
   document.getElementById('badge-my').textContent       = allTasks.filter(t => !t.owner_type || ['self','inferred','fallback'].includes(t.owner_type)).length;
   document.getElementById('badge-delegated').textContent = allTasks.filter(t => t.owner_type === 'explicit').length;
@@ -861,15 +870,18 @@ function cleanTitle(title) {
   return best.length > 100 ? best.substring(0, 97) + '...' : best;
 }
 function buildDesc(task) {
-  if (task.raw_text && task.raw_text !== task.title && task.raw_text.length > task.title.length) {
-    const t = task.raw_text.replace(/\s+/g, ' ').trim();
-    return t.length > 110 ? t.substring(0, 107) + '…' : t;
-  }
-  if (task.description && task.description !== task.title) {
-    const t = task.description.replace(/\s+/g, ' ').trim();
-    return t.length > 110 ? t.substring(0, 107) + '…' : t;
-  }
-  return null;
+  const candidate = (task.raw_text && task.raw_text !== task.title && task.raw_text.length > task.title.length)
+    ? task.raw_text
+    : (task.description && task.description !== task.title ? task.description : null);
+  if (!candidate) return null;
+  // Suppress if description is just a verbose restatement of the title
+  const titleWords = new Set(task.title.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  const descWords  = new Set(candidate.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  const overlap    = [...titleWords].filter(w => descWords.has(w)).length;
+  const similarity = overlap / Math.max(titleWords.size, descWords.size);
+  if (similarity > 0.6) return null;
+  const t = candidate.replace(/\s+/g, ' ').trim();
+  return t.length > 110 ? t.substring(0, 107) + '…' : t;
 }
 
 function buildTaskItem(task) {
